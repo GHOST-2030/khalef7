@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لعبة XO - ضد الكمبيوتر</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #e3f2fd;
+            color: #333;
+            text-align: center;
+            margin: 0;
+            padding: 0;
+        }
+
+        header {
+            background-color: #1e88e5;
+            color: white;
+            padding: 20px;
+            font-size: 2em;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+            position: relative;
+        }
+
+        header::after {
+            content: "تصميم: خليفة الفالح";
+            display: block;
+            font-size: 0.8em;
+            margin-top: 10px;
+            color: #ffeb3b;
+            text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.3);
+        }
+
+        .board {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            width: 80%;
+            max-width: 280px;
+            margin: 20px auto;
+        }
+
+        .cell {
+            width: 100%;
+            padding-top: 100%; /* لجعل الخلية مربعة الشكل */
+            background-color: #ffffff;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2em;
+            font-weight: bold;
+            cursor: pointer;
+            border: 2px solid #000; /* حدود سوداء */
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5); /* بروز وظل */
+            transition: background-color 0.3s, transform 0.2s, box-shadow 0.2s;
+        }
+
+        .cell:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.6); /* ظل أوضح عند التفاعل */
+        }
+
+        .cell.taken {
+            cursor: not-allowed;
+        }
+
+        .cell span {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #1e88e5;
+            text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.3);
+        }
+
+        .highlight {
+            background-color: #42a5f5 !important;
+            color: white;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+        }
+
+        .draw {
+            background-color: #ffeb3b !important;
+            color: black;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+        }
+
+        #restart {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 1em;
+            background-color: #1e88e5;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+            transition: background-color 0.3s ease, transform 0.2s;
+        }
+
+        #restart:hover {
+            background-color: #1565c0;
+            transform: scale(1.05);
+        }
+
+        footer {
+            margin-top: 20px;
+            font-size: 1em;
+            color: #1e88e5;
+            font-weight: bold;
+            text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.3);
+        }
+
+        footer strong {
+            color: #0d47a1;
+        }
+    </style>
+</head>
+<body>
+    <header>لعبة XO - ضد الكمبيوتر</header>
+    <div class="board" id="board"></div>
+    <button id="restart">إعادة اللعب</button>
+    <footer>تم تصميم اللعبة بواسطة <strong>خليفة الفالح</strong></footer>
+
+    <!-- إضافة الأصوات -->
+    <audio id="win-sound" src="win.mp3"></audio>
+    <audio id="draw-sound" src="draw.mp3"></audio>
+    <audio id="click-sound" src="click.mp3"></audio> <!-- صوت الضغط -->
+
+    <script>
+        const board = document.getElementById("board");
+        const restartBtn = document.getElementById("restart");
+        const winSound = document.getElementById("win-sound");
+        const drawSound = document.getElementById("draw-sound");
+        const clickSound = document.getElementById("click-sound"); // صوت الضغط
+
+        let currentPlayer = "X";
+        let gameActive = true;
+        const cells = Array(9).fill(null);
+
+        const winningCombinations = [
+            [0, 1, 2],
+            [3, 4, 5],
+            [6, 7, 8],
+            [0, 3, 6],
+            [1, 4, 7],
+            [2, 5, 8],
+            [0, 4, 8],
+            [2, 4, 6],
+        ];
+
+        function createBoard() {
+            board.innerHTML = "";
+            cells.fill(null);
+            gameActive = true;
+            currentPlayer = "X";
+
+            for (let i = 0; i < 9; i++) {
+                const cell = document.createElement("div");
+                cell.classList.add("cell");
+                cell.dataset.index = i;
+                cell.addEventListener("click", handleCellClick);
+                const span = document.createElement("span");
+                cell.appendChild(span);
+                board.appendChild(cell);
+            }
+        }
+
+        function handleCellClick(e) {
+            const index = e.target.dataset.index;
+
+            if (!gameActive || cells[index]) return;
+
+            clickSound.play(); // تشغيل صوت الضغط
+            makeMove(index, currentPlayer);
+
+            if (checkWin(currentPlayer)) {
+                endGame(`${currentPlayer} فاز!`, "win");
+                return;
+            }
+
+            if (cells.every(cell => cell)) {
+                endGame("تعادل!", "draw");
+                return;
+            }
+
+            currentPlayer = "O";
+            setTimeout(computerMove, 500);
+        }
+
+        function computerMove() {
+            if (!gameActive) return;
+
+            const availableMoves = cells.map((cell, index) => cell === null ? index : null).filter(index => index !== null);
+            const randomMove = availableMoves[Math.floor(Math.random() * availableMoves.length)];
+            makeMove(randomMove, "O");
+
+            if (checkWin("O")) {
+                endGame("الكمبيوتر فاز!", "win");
+                return;
+            }
+
+            if (cells.every(cell => cell)) {
+                endGame("تعادل!", "draw");
+                return;
+            }
+
+            currentPlayer = "X";
+        }
+
+        function makeMove(index, player) {
+            cells[index] = player;
+            const cell = board.children[index];
+            cell.querySelector("span").textContent = player;
+            cell.classList.add("taken");
+        }
+
+        function checkWin(player) {
+            return winningCombinations.some(combination =>
+                combination.every(index => cells[index] === player)
+            );
+        }
+
+        function endGame(message, result) {
+            gameActive = false;
+            if (result === "win") {
+                highlightWinningCombination();
+                winSound.play();
+                alert(message);
+            } else if (result === "draw") {
+                highlightDraw();
+                drawSound.play();
+                alert(message);
+            }
+        }
+
+        function highlightWinningCombination() {
+            winningCombinations.forEach(combination => {
+                if (combination.every(index => cells[index] === currentPlayer)) {
+                    combination.forEach(index => {
+                        const cell = board.children[index];
+                        cell.classList.add("highlight");
+                    });
+                }
+            });
+        }
+
+        function highlightDraw() {
+            Array.from(board.children).forEach(cell => {
+                cell.classList.add("draw");
+            });
+        }
+
+        restartBtn.addEventListener("click", createBoard);
+
+        createBoard();
+    </script>
+</body>
+</html>
